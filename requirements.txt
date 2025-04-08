@@ -1,0 +1,9 @@
+torch
+torchvision
+einops
+timm
+flask
+Pillow
+Flask-HTTPAuth
+werkzeug
+opencv-python

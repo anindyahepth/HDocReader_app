@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Handwritten Text Recognizer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        canvas {
+            border: 2px solid #eee;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            display: block;
+            margin-bottom: 20px;
+        }
+        .container {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .center-align {
+            text-align: center;
+        }
+        body {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        #prediction-window {
+            margin-top: 20px;
+            padding: 20px;
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            font-size: 1.2em;
+            font-weight: bold;
+            text-align: center;
+            background-color: #f0f8f0;
+            color: #333;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: none;
+            width: 80%;
+            max-width: 600px;
+            white-space: pre-wrap; /* Important: Preserve line breaks */
+            word-wrap: break-word;  /* Handle long words */
+        }
+        #imageUpload {
+            display: none;
+        }
+
+        .file-upload-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        .file-upload-button:hover {
+            background-color: #367c39;
+        }
+
+        #selectedImage {
+            margin-top: 10px;
+            max-width: 80%;
+            max-height: 200px;
+            display: none;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="nav-wrapper blue">
+            <a href="/" class="brand-logo center">Text Recognition App</a>
+        </div>
+    </nav>
+
+    <div class="container center-align">
+        <h1>Write the text here</h1>
+        <canvas id="drawingCanvas"></canvas><br>
+
+        <div class="row">
+            <div class="col s12">
+                <button id="clearButton" class="waves-effect waves-light btn">Clear</button>
+                <button id="submitButton" class="waves-effect waves-light btn blue">Submit</button>
+            </div>
+        </div>
+
+        <div class="center-align">
+            <label for="imageUpload" class="file-upload-button">Upload Document</label>
+            <input type="file" id="imageUpload" accept="image/jpeg" />
+            <img id="selectedImage" src="#" alt="Selected Document" />
+        </div>
+
+        <div id="prediction-window">Prediction: None</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        const imageUpload = document.getElementById('imageUpload');
+        const selectedImage = document.getElementById('selectedImage');
+
+
+        function resizeCanvas() {
+            const screenWidth = window.innerWidth;
+            const canvasWidth = screenWidth * 0.5;
+            const lineHeight = 40;
+            const canvasHeight = lineHeight * 3;
+
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Drawing on Canvas
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.offsetX, e.offsetY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            ctx.lineTo(e.offsetX, e.offsetY);
+            ctx.stroke();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            isDrawing = false;
+        });
+
+        // Touch Events
+        canvas.addEventListener('touchstart', (e) => {
+            isDrawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.touches[0].clientX - canvas.offsetLeft, e.touches[0].clientY - canvas.offsetTop);
+            e.preventDefault();
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isDrawing) return;
+            ctx.lineTo(e.touches[0].clientX - canvas.offsetLeft, e.touches[0].clientY - canvas.offsetTop);
+            ctx.stroke();
+            e.preventDefault();
+        });
+
+        canvas.addEventListener('touchend', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('touchcancel', () => {
+            isDrawing = false;
+        });
+
+        // Clear Button
+        document.getElementById('clearButton').addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('prediction-window').style.display = "none";
+            selectedImage.style.display = "none";
+        });
+
+        // Submit Button
+        document.getElementById('submitButton').addEventListener('click', () => {
+            const predictionWindow = document.getElementById('prediction-window');
+            let imageData = '';
+
+             if (selectedImage.style.display === "block") {
+                imageData = selectedImage.src;
+             } else {
+                imageData = canvas.toDataURL('image/png');
+             }
+            fetch('/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `drawing_data=${encodeURIComponent(imageData)}`,
+            })
+            .then(response => response.json())
+            .then(data => {
+                predictionWindow.textContent = "Prediction: " + data.prediction;
+                predictionWindow.style.display = "block";
+                predictionWindow.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            });
+        });
+
+        // Image Upload Logic
+        imageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = (event) => {
+                selectedImage.src = event.target.result;
+                selectedImage.style.display = "block";
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            };
+
+            if (file) {
+                reader.readAsDataURL(file);
+            } else {
+                selectedImage.style.display = "none";
+            }
+        });
+
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+</body>
+</html>
