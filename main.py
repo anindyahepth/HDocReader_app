@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
+from pyngrok import ngrok #needed for Colab
 import sqlite3
 import base64
 import json
@@ -29,12 +30,18 @@ import cv2
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import utils
-from model.HTR_VT import MaskedAutoencoderViT
 from functools import partial
 
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
+
+#manual ngrok set up for Colab
+#################################
+ngrok_path = ngrok.install_ngrok()
+FLASK_PORT = 5000
+public_url = ngrok.connect(FLASK_PORT).public_url
+print(f"ngrok tunnel established! Public URL: {public_url}") # this is a crucial step on Colab
+#################################
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -322,4 +329,5 @@ def delete_all():
 
 if __name__ == '__main__':
 
-      app.run(host='0.0.0.0', port=8080)
+      #app.run(host='0.0.0.0', port=8080)
+      app.run(port=FLASK_PORT)
