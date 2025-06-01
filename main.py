@@ -230,7 +230,7 @@ def format_predicted_text(predicted_text_list):
 
 
 # --- Configure Gemini API ---
-os.environ["GOOGLE_API_KEY"] = "AIzaSyBqfj1jE6Vg0wnyKl8CHDeLiQn5XIiyrdc"
+os.environ["GOOGLE_API_KEY"] = ""
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 try:
