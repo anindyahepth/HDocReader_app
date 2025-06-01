@@ -21,6 +21,7 @@ import ast
 from collections import OrderedDict
 import torchvision.transforms.functional as TF
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+import google.generativeai as genai
 
 
 import cv2
@@ -226,6 +227,61 @@ def format_predicted_text(predicted_text_list):
             formatted_text += str(item) + "\n"  # Add newline after each item
 
     return formatted_text  # Remove leading/trailing newlines
+
+
+# --- Configure Gemini API ---
+os.environ["GOOGLE_API_KEY"] = "AIzaSyBqfj1jE6Vg0wnyKl8CHDeLiQn5XIiyrdc"
+genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+
+try:
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    print(f"Error initializing Gemini model: {e}")
+    print("Please ensure your GOOGLE_API_KEY is set correctly and you have access to gemini-pro-vision.")
+    gemini_model = None # Set to None to handle errors downstream
+
+def correct_transcript_with_gemini(draft_transcript: str, image_path: str) -> str:
+    
+    if gemini_model is None:
+        return "Error: Gemini model not initialized. Check API key and model access."
+
+    try:
+
+        image = Image.open(image_path) 
+        
+
+        # Prepare the prompt for Gemini
+        prompt_parts = [
+            "You are an expert transcriber specializing in historical handwritten documents and accurate optical character recognition (OCR).",
+            "Review the following draft transcript of a single line of handwritten text.",
+            "Using the provided image as the authoritative source, meticulously correct any errors, omissions, or misinterpretations in the draft.",
+            "Pay extremely close attention to spelling, punctuation, capitalization, and spacing exactly as it appears in the handwritten image.",
+            "If the draft is entirely incorrect or misses major parts, provide the full correct transcription based on the image.",
+            "If the draft is mostly correct, make only the necessary minor corrections.",
+            "Do NOT add any explanations or additional text; only provide the corrected transcript.",
+            "\n\n**Draft Transcript:**\n",
+            f"{draft_transcript}\n\n",
+            "**Image Context:**\n",
+            image, # Gemini takes the PIL Image object directly
+            "\n\n**Corrected Transcript:**\n"
+        ]
+
+        # Call the Gemini API
+        response = gemini_model.generate_content(prompt_parts)
+
+        # Extract the corrected text
+        corrected_transcript = response.text.strip()
+
+        if not corrected_transcript:
+            return "Gemini returned an empty correction."
+
+        return corrected_transcript
+
+    except Exception as e:
+        print(f"Error during transcript correction: {e}")
+        # In a production Flask app, you might log this error more formally
+        return f"An error occurred during correction: {e}"
+
   
   
 @app.route('/', methods=['GET', 'POST'])
@@ -258,18 +314,25 @@ def index():
        predicted_text_list = make_predictions(jpg_filename)
        
        predicted_text = format_predicted_text(predicted_text_list)
+
+       draft_transcript = predicted_text
+
+       image_path = jpg_filename
+
+       final_transcript = correct_transcript_with_gemini(draft_transcript, image_path)
        
        print(predicted_text)
+       print(final_transcript)
        
        
         
 
        conn = sqlite3.connect('db.db')
        c = conn.cursor()
-       c.execute("INSERT INTO drawings (data, predicted_text) VALUES (?, ?)", (data, predicted_text))
+       c.execute("INSERT INTO drawings (data, predicted_text) VALUES (?, ?)", (data, final_transcript))
        conn.commit()
        conn.close()
-       return jsonify({'prediction': predicted_text })
+       return jsonify({'prediction': final_transcript})
    return render_template('index.html')
 
 #sqlite3.Binary(data.encode('utf-8'))
