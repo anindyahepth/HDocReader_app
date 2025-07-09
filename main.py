@@ -201,7 +201,7 @@ def make_predictions(image_path):
 
          with torch.no_grad():
           predicted_text = recognize_text(image, processor = processor) 
-         preds_list.append(predicted_text)
+          preds_list.append(predicted_text)
         
   return preds_list
 
