@@ -50,7 +50,7 @@ app.secret_key = os.urandom(24)
 auth = HTTPBasicAuth()
 
 users = {
-    "admin": generate_password_hash("adey")  # Replace with a strong password
+    "admin": generate_password_hash("passwd")  # Replace with a strong password
 }
 
 @auth.verify_password
