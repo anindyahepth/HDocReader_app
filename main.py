@@ -252,7 +252,7 @@ def correct_transcript_with_gemini(draft_transcript: str, image_path: str) -> st
 
         # Prepare the prompt for Gemini
         prompt_parts = [
-            "You are an expert transcriber specializing in historical handwritten documents and accurate optical character recognition (OCR).",
+            "You are an expert transcriber specializing in handwritten documents and accurate optical character recognition (OCR).",
             "Review the following draft transcript of a single line of handwritten text.",
             "Using the provided image as the authoritative source, meticulously correct any errors, omissions, or misinterpretations in the draft.",
             "Pay extremely close attention to spelling, punctuation, capitalization, and spacing exactly as it appears in the handwritten image.",
