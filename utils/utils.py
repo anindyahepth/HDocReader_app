@@ -1,179 +1,217 @@
-
-import torch
-import torch.distributed as dist
-from torch.distributions.uniform import Uniform
-
+import json
+import numpy as np
+from PIL import Image
+import io
 import os
+from io import BytesIO
+import torchvision.transforms as transforms
+import torch
+import torch.nn as nn 
+import torch.utils.data
+import zipfile
+
 import re
 import sys
-import math
-import logging
-from copy import deepcopy
+import argparse
+import ast
 from collections import OrderedDict
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-
-def randint(low, high):
-    return int(torch.randint(low, high, (1, )))
+import torchvision.transforms.functional as TF
+from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+import google.generativeai as genai
+import cv2
 
 
-def rand_uniform(low, high):
-    return float(Uniform(low, high).sample())
 
 
-def get_logger(out_dir):
-    logger = logging.getLogger('Exp')
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-
-    file_path = os.path.join(out_dir, "run.log")
-    file_hdlr = logging.FileHandler(file_path)
-    file_hdlr.setFormatter(formatter)
-
-    strm_hdlr = logging.StreamHandler(sys.stdout)
-    strm_hdlr.setFormatter(formatter)
-
-    logger.addHandler(file_hdlr)
-    logger.addHandler(strm_hdlr)
-    return logger
+def convert_png_to_jpg_pillow_alpha_fill(png_data, jpg_filename="output.jpg"):
+    try:
+        img = Image.open(io.BytesIO(png_data))
+        if img.mode == 'RGBA':
+            background = Image.new('RGB', img.size, (255, 255, 255))  # White background
+            background.paste(img, mask=img.split()[3])  # Paste with alpha mask
+            img = background
+        img.save(jpg_filename, "JPEG")
+        print(f"PNG converted to JPG (Pillow alpha fill) and saved as {jpg_filename}")
+    except Exception as e:
+        print(f"Error (Pillow alpha fill): {e}")
 
 
-def update_lr_cos(nb_iter, warm_up_iter, total_iter, max_lr, optimizer, min_lr=1e-7):
-
-    if nb_iter < warm_up_iter:
-        current_lr = max_lr * (nb_iter + 1) / (warm_up_iter + 1)
-    else:
-        current_lr = min_lr + (max_lr - min_lr) * 0.5 * (1. + math.cos(math.pi * nb_iter / (total_iter - warm_up_iter)))
-
-    for param_group in optimizer.param_groups:
-        param_group["lr"] = current_lr
-
-    return optimizer, current_lr
 
 
-class CTCLabelConverter(object):
-    def __init__(self, character):
-        dict_character = list(character)
-        self.dict = {}
-        for i, char in enumerate(dict_character):
-            self.dict[char] = i + 1
-        if len(self.dict) == 87:     # '[' and ']' are not in the test set but in the training and validation sets.
-            self.dict['['], self.dict[']'] = 88, 89
-        self.character = ['[blank]'] + dict_character
+def split_handwritten_page(image_path, output_dir="lines", target_size=(512, 64)):
 
-    def encode(self, text):
-        length = [len(s) for s in text]
-        text = ''.join(text)
-        text = [self.dict[char] for char in text]
+    os.makedirs(output_dir, exist_ok=True)
 
-        return (torch.IntTensor(text).to(device), torch.IntTensor(length).to(device))
+    # Load the image
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        raise ValueError(f"Could not read image from {image_path}")
 
-    def decode(self, text_index, length):
-        texts = []
-        index = 0
+    # Preprocessing: Binarization
+    _, binary_img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-        for l in length:
-            t = text_index[index:index + l]
-            char_list = []
-            for i in range(l):
-                if t[i] != 0 and (not (i > 0 and t[i - 1] == t[i])) and t[i]<len(self.character):
-                    char_list.append(self.character[t[i]])
-            text = ''.join(char_list)
+    # Horizontal Projection
+    horizontal_projection = np.sum(binary_img, axis=1)
 
-            texts.append(text)
-            index += l
-        return texts
+    # Find line boundaries
+    line_starts = []
+    line_ends = []
+    threshold = np.max(horizontal_projection) / 120  # Adjust threshold as needed - 100 works well
+    in_line = False
 
+    for y, projection_value in enumerate(horizontal_projection):
+        if projection_value > threshold and not in_line:
+            line_starts.append(y)
+            in_line = True
+        elif projection_value <= threshold and in_line:
+            line_ends.append(y)
+            in_line = False
 
-class Averager(object):
-    def __init__(self):
-        self.reset()
+    # Handle the case where the last line extends to the bottom
+    if in_line:
+        line_ends.append(binary_img.shape[0])
 
-    def add(self, v):
-        count = v.data.numel()
-        v = v.data.sum()
-        self.n_count += count
-        self.sum += v
+    line_images = []
 
-    def reset(self):
-        self.n_count = 0
-        self.sum = 0
+    for i, (start_y, end_y) in enumerate(zip(line_starts, line_ends)):
+        line_img = img[start_y:end_y, :]
 
-    def val(self):
-        res = 0
-        if self.n_count != 0:
-            res = self.sum / float(self.n_count)
-        return res
+        # Pad or resize to target size
+        pil_img = Image.fromarray(line_img)
+        resized_img = pil_img
+        #resized_img = pil_img.resize(target_size, Image.Resampling.LANCZOS)
 
+        line_images.append(resized_img)
 
-class Metric(object):
-    def __init__(self, name=''):
-        self.name = name
-        self.sum = torch.tensor(0.).double()
-        self.n = torch.tensor(0.)
+        # Save line image
+        line_filename = os.path.join(output_dir, f"line_{i}.jpg")
+        resized_img.save(line_filename)
 
-    def update(self, val):
-        rt = val.clone()
-        dist.all_reduce(rt, op=dist.ReduceOp.SUM)
-        rt /= dist.get_world_size()
-        self.sum += rt.detach().cpu().double()
-        self.n += 1
+    return line_images    
 
-    @property
-    def avg(self):
-        return self.sum / self.n.double()
+def recognize_text(image, processor):
+    """
+    Recognizes text in an image using the TrOCR model.
 
+    Args:
+        image_bytes (bytes): The bytes of the JPEG image file.
 
-class ModelEma:
-    def __init__(self, model, decay=0.9999, device='', resume=''):
-        self.ema = deepcopy(model)
-        self.ema.eval()
-        self.decay = decay
-        self.device = device
-        if device:
-            self.ema.to(device=device)
-        self.ema_has_module = hasattr(self.ema, 'module')
-        if resume:
-            self._load_checkpoint(resume)
-        for p in self.ema.parameters():
-            p.requires_grad_(False)
+    Returns:
+        str: The recognized text.
+    """
+    try:
+        
+        image = image  # No need to convert, already RGB
 
-    def _load_checkpoint(self, checkpoint_path, mapl=None):
-        checkpoint = torch.load(checkpoint_path,map_location=mapl)
-        assert isinstance(checkpoint, dict)
-        if 'state_dict_ema' in checkpoint:
-            new_state_dict = OrderedDict()
-            for k, v in checkpoint['state_dict_ema'].items():
-                if self.ema_has_module:
-                    name = 'module.' + k if not k.startswith('module') else k
-                else:
-                    name = k
-                new_state_dict[name] = v
-            self.ema.load_state_dict(new_state_dict)
-            print("=> Loaded state_dict_ema")
-        else:
-            print("=> Failed to find state_dict_ema, starting from loaded model weights")
+        # Convert image to RGB if it's grayscale
+        if image.mode != "RGB":
+            image = image.convert("RGB")
 
-    def update(self, model, num_updates=-1):
-        needs_module = hasattr(model, 'module') and not self.ema_has_module
-        if num_updates >= 0:
-            _cdecay = min(self.decay, (1 + num_updates) / (10 + num_updates))
-        else:
-            _cdecay = self.decay
+        # Process the image
+        pixel_values = processor(images=image, return_tensors="pt").pixel_values
+        
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        pixel_values = pixel_values.to(device)  # Move to the correct device
 
+        # Generate predictions
+        model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten")
         with torch.no_grad():
-            msd = model.state_dict()
-            for k, ema_v in self.ema.state_dict().items():
-                if needs_module:
-                    k = 'module.' + k
-                model_v = msd[k].detach()
-                if self.device:
-                    model_v = model_v.to(device=self.device)
-                ema_v.copy_(ema_v * _cdecay + (1. - _cdecay) * model_v)
+            generated_ids = model.generate(pixel_values)
+
+        # Decode the predicted IDs into text
+        predicted_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        return predicted_text
+    except Exception as e:
+        print(f"Error during text recognition: {e}")
+        return ""  # Return empty string on error
 
 
-def format_string_for_wer(str):
-    str = re.sub('([\[\]{}/\\()\"\'&+*=<>?.;:,!\-—_€#%°])', r' \1 ', str)
-    str = re.sub('([ \n])+', " ", str).strip()
-    return str
+
+
+def make_predictions(image_path):
+
+  # Load the TrOCR model and processor
+  processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
+  model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten")
+
+  # Set the model to evaluation mode
+  model.eval()
+
+  # Use GPU if available
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  model.to(device)
+  
+  line_images = split_handwritten_page(image_path) #line tensors
+  preds_list = []
+
+  for i,line_image in enumerate(line_images):
+         image = line_image
+
+         with torch.no_grad():
+          predicted_text = recognize_text(image, processor = processor) 
+          preds_list.append(predicted_text)
+        
+  return preds_list
+
+
+def format_predicted_text(predicted_text_list):
+    """
+    Formats a list of strings (or nested lists of strings) into a single string,
+    with individual strings appearing on different lines.
+
+    Args:
+        predicted_text_list (list): A list of strings or nested lists of strings.
+
+    Returns:
+        str: A formatted string with newlines.
+    """
+    formatted_text = ""
+    for item in predicted_text_list:
+        if isinstance(item, list):
+            formatted_text += "\n".join(item) + "\n"  # Join inner list with newlines, add extra newline
+        else:
+            formatted_text += str(item) + "\n"  # Add newline after each item
+
+    return formatted_text  # Remove leading/trailing newlines
+
+def correct_transcript_with_gemini(gemini_model,draft_transcript: str, image_path: str) -> str:
+    
+    if gemini_model is None:
+        return "Error: Gemini model not initialized. Check API key and model access."
+
+    try:
+
+        image = Image.open(image_path) 
+        
+
+        # Prepare the prompt for Gemini
+        prompt_parts = [
+            "You are an expert transcriber specializing in handwritten documents and accurate optical character recognition (OCR).",
+            "Review the following draft transcript of a single line of handwritten text.",
+            "Using the provided image as the authoritative source, meticulously correct any errors, omissions, or misinterpretations in the draft.",
+            "Pay extremely close attention to spelling, punctuation, capitalization, and spacing exactly as it appears in the handwritten image.",
+            "If the draft is entirely incorrect or misses major parts, provide the full correct transcription based on the image.",
+            "If the draft is mostly correct, make only the necessary minor corrections.",
+            "Do NOT add any explanations or additional text; only provide the corrected transcript.",
+            "\n\n**Draft Transcript:**\n",
+            f"{draft_transcript}\n\n",
+            "**Image Context:**\n",
+            image, # Gemini takes the PIL Image object directly
+            "\n\n**Corrected Transcript:**\n"
+        ]
+
+        # Call the Gemini API
+        response = gemini_model.generate_content(prompt_parts)
+
+        # Extract the corrected text
+        corrected_transcript = response.text.strip()
+
+        if not corrected_transcript:
+            return "Gemini returned an empty correction."
+
+        return corrected_transcript
+
+    except Exception as e:
+        print(f"Error during transcript correction: {e}")
+        # In a production Flask app, you might log this error more formally
+        return f"An error occurred during correction: {e}"
