@@ -1,9 +1,9 @@
-torch
-torchvision
-einops
-timm
-flask
-Pillow
-Flask-HTTPAuth
-werkzeug
-opencv-python
+flask version==3.1.1
+torch version==2.6.0+cu124
+torchvision version==0.21.0+cu124
+einops version==0.8.1
+timm version==1.0.16
+Pillow version==11.2.1
+Flask-HTTPAuth version==4.8.0
+werkzeug version==3.1.3
+opencv-python version==4.11.0.86
