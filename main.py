@@ -41,7 +41,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 ngrok_path = ngrok.install_ngrok()
 FLASK_PORT = 5000
 public_url = ngrok.connect(FLASK_PORT).public_url
-print(f"ngrok tunnel established! Public URL: {public_url}") # this is a crucial step on Colab
+print(f"ngrok tunnel established! Public URL: {public_url}")
 #################################
 
 app = Flask(__name__)
