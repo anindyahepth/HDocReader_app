@@ -6,9 +6,9 @@ The app has two components:
 1) A TrOCR model : This encoder-decoder model performs a first draft of the transcription from the uploaded document. 
 2) A Gemini-1.5-flash model : This LLM corrects the first draft using the image of the document as context. 
 
-The app can be run locally using the Dockerfile. 
+The app can be run locally using Docker (see the Dockerfile for details). 
 
-On Colab, the app can be run using pyngrok. After forking and importing the repo, first install the required packages:
+On Colab, the app can be run in a public url using pyngrok. After forking and importing the repo, first install the required packages:
 
 ```
 !pip install -q -r requirements.txt
@@ -21,7 +21,7 @@ from pyngrok import ngrok
 NGROK_AUTH_TOKEN = "your_token"
 ngrok.set_auth_token(NGROK_AUTH_TOKEN)
 ```
-A public url for the app can then be generated using the command:
+The public url for the app can then be generated using the command:
 ```
 %run ./HDocReader_app/main.py
 ```
