@@ -130,7 +130,7 @@ def recognize_text(image, processor):
 
 def make_predictions(image_path):
 
-  # Load the TrOCR model and processor
+  # Load the TrOCR model and processor - replace this with the fine-tuned model
   processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
   model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten")
 
