@@ -133,7 +133,7 @@ def index():
        c.execute("INSERT INTO drawings (data, predicted_text) VALUES (?, ?)", (data, final_transcript))
        conn.commit()
        conn.close()
-       return jsonify({'Transcribed Text': final_transcript})
+       return jsonify({'prediction': final_transcript})
    return render_template('index.html')
 
 #sqlite3.Binary(data.encode('utf-8'))
