@@ -11,9 +11,10 @@ On Colab, the app can be run using pyngrok. After forking and importing the repo
 
 ```!pip install -q -r requirements.txt```
 
-After te
+After signing up on the Ngrok website and generating your authorization token: 
 
 ```
+from pyngrok import ngrok
 NGROK_AUTH_TOKEN = "your_token"
 ngrok.set_auth_token(NGROK_AUTH_TOKEN)
 ```
