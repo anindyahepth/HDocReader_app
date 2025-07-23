@@ -1,6 +1,6 @@
 # HDocReader_app
 
-This is Flask-based web-app for transcribing handwritten text entered by an user or from an uploaded document at the line or paragraph level. 
+This is Flask-based web-app for transcribing handwritten text entered by a user or from an uploaded document at the line or paragraph level. 
 
 The app has two components: 
 1) **TrOCR** : This pre-trained encoder-decoder model performs a first draft of the transcription from the uploaded document. 
