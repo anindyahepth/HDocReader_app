@@ -194,7 +194,7 @@
             })
             .then(response => response.json())
             .then(data => {
-                predictionWindow.textContent = "Prediction: " + data.prediction;
+                predictionWindow.textContent = "Transcribed Text: " + data.prediction;
                 predictionWindow.style.display = "block";
                 predictionWindow.scrollIntoView({ behavior: 'smooth', block: 'end' });
             });
