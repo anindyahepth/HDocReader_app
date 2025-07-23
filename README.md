@@ -13,5 +13,7 @@ On Colab, the app can be run using pyngrok. After forking and importing the repo
 
 After te
 
-```NGROK_AUTH_TOKEN = "your_token"
-ngrok.set_auth_token(NGROK_AUTH_TOKEN)```
+```
+NGROK_AUTH_TOKEN = "your_token"
+ngrok.set_auth_token(NGROK_AUTH_TOKEN)
+```
