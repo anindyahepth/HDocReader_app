@@ -9,7 +9,9 @@ The app can be run locally using the Dockerfile.
 
 On Colab, the app can be run using pyngrok. After forking and importing the repo, first install the required packages:
 
-```!pip install -q -r requirements.txt```
+```
+!pip install -q -r requirements.txt
+```
 
 After signing up on the Ngrok website and generating your authorization token: 
 
