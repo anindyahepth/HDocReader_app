@@ -10,3 +10,7 @@ The app can be run locally using the Dockerfile.
 On Colab, the app can be run using pyngrok. After forking and importing the repo, first install the required packages:
 
 ```!pip install -q -r requirements.txt```
+
+```from pyngrok import ngrok # Import ngrok from pyngrok
+NGROK_AUTH_TOKEN = "your_token"
+ngrok.set_auth_token(NGROK_AUTH_TOKEN)```
