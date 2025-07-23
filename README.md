@@ -18,3 +18,7 @@ from pyngrok import ngrok
 NGROK_AUTH_TOKEN = "your_token"
 ngrok.set_auth_token(NGROK_AUTH_TOKEN)
 ```
+A public url for the app can then be generated using the command:
+```
+%run ./HDocReader_app/main.py
+```
