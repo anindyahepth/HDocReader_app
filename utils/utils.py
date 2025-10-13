@@ -89,19 +89,6 @@ def split_handwritten_page(image_path, output_dir="lines", target_size=(512, 64)
 
     return line_images    
 
-# def apply_dynamic_quantization(model):
-#     """Apply dynamic quantization to the model"""
-#     print("Applying dynamic quantization...")
-
-#     # Dynamic quantization - quantizes weights, activations computed in fp32
-#     quantized_model = torch.quantization.quantize_dynamic(
-#         model,
-#         {torch.nn.Linear},  # Quantize Linear layers
-#         dtype=torch.qint8
-#     )
-
-#     return quantized_model
-
 
 
 def recognize_text(image, processor):
