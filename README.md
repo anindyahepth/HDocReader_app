@@ -2,9 +2,11 @@
 
 This is Flask-based web-app for transcribing handwritten text entered by a user or from an uploaded document at the line or paragraph level. 
 
-The app has two components: 
-1) **TrOCR** : This pre-trained encoder-decoder model performs a first draft of the transcription from the uploaded document. 
-2) **Gemini-1.5-flash** : This LLM corrects the first draft using the image of the document as context.
+The workflow has the following components: 
+1) **Draft Transcription** :  Pre-trained **TrOCR** model performs a first draft of the transcription from the uploaded document. 
+2) **LLM Editor** : **Gemini-2.5-flash** corrects the first draft using the image of the document as context, and produces the final transcript.
+3) **Evaluation** : The final transcript is evaluated by a second LLM **(GPT-4o)** which gives the transcript an accuracy score based on the evaluated Character Accuracy Rate (CER).
+4) **MLflow Tracking/Real-time Performance Dashboard**
 
    
 
@@ -12,8 +14,6 @@ The app has two components:
 
 
 
-
-The app can be run locally using Docker (see the Dockerfile for details). You will need to have a google API key for calling the Gemini model. 
 
 On Colab, the app can be run in a public url using **pyngrok**. After forking and importing the repo, first install the required packages:
 
