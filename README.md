@@ -15,7 +15,7 @@ The workflow has the following components:
 
 
 
-On Colab, the app can be run in a public url using **pyngrok**. After forking and importing the repo, first install the required packages:
+The app can also be run on Colab in a public url using **pyngrok**. After forking and importing the repo, first install the required packages:
 
 ```
 !pip install -q -r requirements.txt
