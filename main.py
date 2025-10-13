@@ -145,6 +145,7 @@ def index():
        
        #save as png file
        output_dir = './images'
+       os.makedirs(output_dir, exist_ok=True)
        image_filename = os.path.join(output_dir, f"image_01.png") 
        with open(image_filename, "wb") as f: 
               f.write(image_data)  
