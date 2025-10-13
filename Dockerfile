@@ -1,9 +1,6 @@
 # Use a Python base image with specific version for reproducibility
 FROM python:3.11-slim
 
-# Set metadata
-LABEL maintainer="HDocReader Team"
-LABEL description="Handwriting Document Reader with TrOCR and Gemini"
 
 # Set the working directory in the container
 WORKDIR /app
