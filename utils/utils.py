@@ -89,6 +89,21 @@ def split_handwritten_page(image_path, output_dir="lines", target_size=(512, 64)
 
     return line_images    
 
+# def apply_dynamic_quantization(model):
+#     """Apply dynamic quantization to the model"""
+#     print("Applying dynamic quantization...")
+
+#     # Dynamic quantization - quantizes weights, activations computed in fp32
+#     quantized_model = torch.quantization.quantize_dynamic(
+#         model,
+#         {torch.nn.Linear},  # Quantize Linear layers
+#         dtype=torch.qint8
+#     )
+
+#     return quantized_model
+
+
+
 def recognize_text(image, processor):
     """
     Recognizes text in an image using the TrOCR model.
@@ -175,43 +190,29 @@ def format_predicted_text(predicted_text_list):
     return formatted_text  # Remove leading/trailing newlines
 
 def correct_transcript_with_gemini(gemini_model,draft_transcript: str, image_path: str) -> str:
-    
     if gemini_model is None:
-        return "Error: Gemini model not initialized. Check API key and model access."
-
+        return draft_transcript
     try:
-
-        image = Image.open(image_path) 
-        
-
-        # Prepare the prompt for Gemini
+        image = Image.open(image_path)
         prompt_parts = [
             "You are an expert transcriber specializing in handwritten documents and accurate optical character recognition (OCR).",
             "Review the following draft transcript of a single line of handwritten text.",
             "Using the provided image as the authoritative source, meticulously correct any errors, omissions, or misinterpretations in the draft.",
             "Pay extremely close attention to spelling, punctuation, capitalization, and spacing exactly as it appears in the handwritten image.",
+            "Do not correct spelling errors if they are present in the image.",
+            "If the draft is a single word, provide the full correct transcription based on the image.",
             "If the draft is entirely incorrect or misses major parts, provide the full correct transcription based on the image.",
             "If the draft is mostly correct, make only the necessary minor corrections.",
             "Do NOT add any explanations or additional text; only provide the corrected transcript.",
             "\n\n**Draft Transcript:**\n",
             f"{draft_transcript}\n\n",
             "**Image Context:**\n",
-            image, # Gemini takes the PIL Image object directly
-            "\n\n**Corrected Transcript:**\n"
+            image,
+            "\n\n**Corrected Transcript:**\n",
         ]
-
-        # Call the Gemini API
         response = gemini_model.generate_content(prompt_parts)
-
-        # Extract the corrected text
         corrected_transcript = response.text.strip()
-
-        if not corrected_transcript:
-            return "Gemini returned an empty correction."
-
-        return corrected_transcript
-
+        return corrected_transcript or draft_transcript
     except Exception as e:
         print(f"Error during transcript correction: {e}")
-        # In a production Flask app, you might log this error more formally
-        return f"An error occurred during correction: {e}"
+        return draft_transcript

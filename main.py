@@ -1,11 +1,11 @@
 from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
-from pyngrok import ngrok #needed for Colab
 import sqlite3
 import base64
 import json
 import numpy as np
 from PIL import Image
 import io
+from dotenv import load_dotenv
 import os
 from io import BytesIO
 import torchvision.transforms as transforms
@@ -26,6 +26,8 @@ import google.generativeai as genai
 
 import cv2
 from utils import utils
+import time
+from mlflow_config import setup_mlflow, log_prediction_run
 
 
 
@@ -37,13 +39,13 @@ from functools import partial
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
-#manual ngrok set up for Colab
-#################################
-ngrok_path = ngrok.install_ngrok()
-FLASK_PORT = 5000
-public_url = ngrok.connect(FLASK_PORT).public_url
-print(f"ngrok tunnel established! Public URL: {public_url}")
-#################################
+import subprocess
+
+# Flask app configuration for local deployment
+load_dotenv()
+FLASK_PORT = os.environ.get('FLASK_APP_PORT')
+MLFLOW_PORT = os.environ.get('MLFLOW_UI_PORT')
+DASHBOARD_PORT = os.environ.get('DASHBOARD_PORT')
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -70,21 +72,59 @@ def init_db():
 
 init_db()
 
+# Setup MLflow
+mlflow = setup_mlflow()
+def start_mlflow_ui(port):
+    print(f"Starting MLflow UI on port {port}...")
+    try:
+        # Get the absolute path to ensure MLflow UI uses the correct location
+        current_dir = os.path.abspath(os.path.dirname(__file__))
+        
+        # Change to the app directory before starting MLflow UI
+        original_dir = os.getcwd()
+        os.chdir(current_dir)
+        
+        # Start MLflow UI on specified port with relative paths from app directory
+        mlflow_process = subprocess.Popen([
+            "mlflow", "ui", 
+            "--backend-store-uri", "sqlite:///mlflow.db",
+            "--default-artifact-root", "./mlruns",
+            "--host", "0.0.0.0",
+            "--port", str(port)
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=current_dir)
+        
+        # Change back to original directory
+        os.chdir(original_dir)
+        
+        print(f"   Database: {os.path.join(current_dir, 'mlflow.db')}")
+        print(f"   Artifacts: {os.path.join(current_dir, 'mlruns')}")
+        return mlflow_process
+    except Exception as e:
+        print(f"Failed to start MLflow UI: {e}")
+        return None
 
-# --- Configure Gemini API ---
-os.environ["GOOGLE_API_KEY"] = ""
+ # Start Dashboard
+def start_dashboard(port):
+    print(f"Starting Dashboard on port {port}...")
+    try:
+        dashboard_process = subprocess.Popen([
+            sys.executable, "real_time_dashboard.py"
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return dashboard_process
+    except Exception as e:
+        print(f" Failed to start Dashboard: {e}")
+        return None
+
+# Configure Gemini API
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 try:
-    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    gemini_model = genai.GenerativeModel('gemini-2.5-flash')
 except Exception as e:
     print(f"Error initializing Gemini model: {e}")
-    # print("Please ensure your GOOGLE_API_KEY is set correctly and you have access to gemini-pro-vision.")
-    gemini_model = None # Set to None to handle errors downstream
+    gemini_model = None
 
 
-  
-  
 @app.route('/', methods=['GET', 'POST'])
 def index():
    if request.method == 'POST':
@@ -93,24 +133,18 @@ def index():
        image_data = base64.b64decode(encoded)
        print("Base64 decoded successfully. Length:", len(image_data))
        
-       #save as png file 
-             
-       #output_dir = '/Users/anindyadey/HTR-app/images'
+       #save as png file
        output_dir = './images'
        image_filename = os.path.join(output_dir, f"image_01.png") 
        with open(image_filename, "wb") as f: 
-              f.write(image_data)
-              
-       #convert png to jpg file and save
+              f.write(image_data)  
               
        jpg_filename = os.path.join(output_dir, f"image_01.jpg")
-       
        utils.convert_png_to_jpg_pillow_alpha_fill(image_data, jpg_filename)
        
        
-       #open the jpg file, grey-scale convert and feed it to the model
-              
-       #image = Image.open(jpg_filename).convert('L')
+       # Start timing
+       start_time = time.time()
        
        predicted_text_list = utils.make_predictions(jpg_filename)
        
@@ -122,26 +156,60 @@ def index():
 
        final_transcript = utils.correct_transcript_with_gemini(gemini_model, draft_transcript, image_path)
        
-       print(predicted_text)
-       print(final_transcript)
+       # Calculate processing time
+       processing_time = time.time() - start_time
        
+       # Initialize CER evaluator with GPT-4o for reference transcription
+       from accuracy_evaluator import AccuracyEvaluator
        
-        
+       # Use OpenAI for reference transcription
+       openai_api_key = os.environ.get("OPENAI_API_KEY")
+       if openai_api_key:
+           evaluator = AccuracyEvaluator(
+               api_key=openai_api_key,
+               provider="openai",
+               model_name="gpt-4o"
+           )
+       else:
+           # Fallback to basic CER if OpenAI not available
+           evaluator = AccuracyEvaluator(
+               api_key="",
+               provider="cer",
+               model_name="character_error_rate"
+           )
+       
+       # Evaluate prediction quality using CER
+       evaluation_result = evaluator.evaluate_prediction(
+           image_path=image_path,
+           prediction=final_transcript,
+           reference_text= None  
+       )
+       
+       #Log to MLflow with metrics and evaluation results per run
+       log_prediction_run(
+           draft_text=draft_transcript,
+           corrected_text=final_transcript,
+           image_path=image_path,
+           processing_time=processing_time,
+           evaluation_result=evaluation_result
+       )           
 
+       print("TrOCR_draft:",predicted_text)
+       print("final_transcript:",final_transcript)
+       print("GPT-4o Reference:", evaluation_result.get("reference_text", "N/A"))
+       print("CER:", evaluation_result.get("cer", "N/A"))
+       print("Character Accuracy:", evaluation_result.get("character_accuracy", "N/A"))
+       print(processing_time)
+       print("Flask_app_port:",FLASK_PORT)       
+       
+    
        conn = sqlite3.connect('db.db')
        c = conn.cursor()
        c.execute("INSERT INTO drawings (data, predicted_text) VALUES (?, ?)", (data, final_transcript))
        conn.commit()
        conn.close()
        return jsonify({'prediction': final_transcript})
-   return render_template('index.html')
-
-#sqlite3.Binary(data.encode('utf-8'))
-#print(type(data))
-#print(data)
-#data = data.encode('utf-8').decode('utf-8') #add explicit encoding.
-
-
+   return render_template("index.html")
 
 @app.route('/admin')
 @auth.login_required
@@ -192,6 +260,15 @@ def delete_all():
     return redirect(url_for('admin'))
 
 if __name__ == '__main__':
-
-      #app.run(host='0.0.0.0', port=8080)
-      app.run(port=FLASK_PORT)
+      start_mlflow_ui(port=MLFLOW_PORT)
+      time.sleep(3)
+      print(f"MLFLOW UI STARTED ON http://0.0.0.0:{MLFLOW_PORT}")
+      
+      start_dashboard(port=DASHBOARD_PORT)
+      time.sleep(3)
+      print(f"DASHBOARD STARTED ON http://0.0.0.0:{DASHBOARD_PORT}")
+      
+      # Start Flask app last (blocking)
+      print(f"FLASK APP STARTING ON http://0.0.0.0:{FLASK_PORT}")
+      app.run(host='0.0.0.0', port=FLASK_PORT)
+      

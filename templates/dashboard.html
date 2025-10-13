@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handwriting Recognition - Real-time Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+
+        .metric-title {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .metric-unit {
+            font-size: 1rem;
+            color: #888;
+        }
+
+        .metric-trend {
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .trend-up { color: #28a745; }
+        .trend-down { color: #dc3545; }
+        .trend-stable { color: #6c757d; }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-title {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: #333;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .chart-wrapper {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        .chart-wrapper canvas {
+            position: absolute !important;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .recent-predictions {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .predictions-title {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .prediction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s ease;
+        }
+
+        .prediction-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .prediction-item:last-child {
+            border-bottom: none;
+        }
+
+        .prediction-info {
+            flex: 1;
+        }
+
+        .prediction-time {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .prediction-metrics {
+            display: flex;
+            gap: 20px;
+            margin-top: 5px;
+        }
+
+        .prediction-metric {
+            font-size: 0.9rem;
+        }
+
+        .metric-label {
+            color: #666;
+            margin-right: 5px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            margin-right: 10px;
+        }
+
+        .status-indicator.processing { background: #ffc107; }
+        .status-indicator.error { background: #dc3545; }
+
+        .refresh-info {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .chart-card {
+                height: 350px;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Real-time Performance Dashboard</h1>
+            <p>Handwriting Recognition App - Live Metrics & Analytics</p>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">Total Predictions</div>
+                <div class="metric-value" id="total-predictions">0</div>
+                <div class="metric-unit">predictions</div>
+                <div class="metric-trend trend-up" id="predictions-trend">↗️ +0%</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Character Accuracy</div>
+                <div class="metric-value" id="avg-accuracy">0.0</div>
+                <div class="metric-unit">%</div>
+                <div class="metric-trend" id="accuracy-trend">→ Stable</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Character Error Rate</div>
+                <div class="metric-value" id="avg-cer">0.0</div>
+                <div class="metric-unit">%</div>
+                <div class="metric-trend" id="cer-trend">→ Stable</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Average Processing Time</div>
+                <div class="metric-value" id="avg-processing-time">0.0</div>
+                <div class="metric-unit">seconds</div>
+                <div class="metric-trend" id="time-trend">→ Stable</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">System CPU Usage</div>
+                <div class="metric-value" id="system-cpu">0.0</div>
+                <div class="metric-unit">%</div>
+                <div class="metric-trend" id="cpu-trend">→ Stable</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">System Memory</div>
+                <div class="metric-value" id="system-memory">0.0</div>
+                <div class="metric-unit">%</div>
+                <div class="metric-trend" id="memory-trend">→ Stable</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-title">Active Users</div>
+                <div class="metric-value" id="active-users">0</div>
+                <div class="metric-unit">users</div>
+                <div class="metric-trend">🟢 Online</div>
+            </div>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-card">
+                <div class="chart-title">Processing Time Trends</div>
+                <div class="chart-wrapper">
+                    <canvas id="processingTimeChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">Accuracy Trends</div>
+                <div class="chart-wrapper">
+                    <canvas id="accuracyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="recent-predictions">
+            <div class="predictions-title">Recent Predictions</div>
+            <div id="predictions-list">
+                <div class="loading">Loading recent predictions...</div>
+            </div>
+        </div>
+
+        <div class="refresh-info">
+            <p>🔄 Dashboard updates every second • Last updated: <span id="last-update">--</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // Chart instances
+        let processingTimeChart, accuracyChart;
+        
+        // Initialize charts
+        function initializeCharts() {
+            const ctx1 = document.getElementById('processingTimeChart').getContext('2d');
+            const ctx2 = document.getElementById('accuracyChart').getContext('2d');
+            
+            processingTimeChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Processing Time (seconds)',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Seconds'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+            
+            accuracyChart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Character Accuracy (%)',
+                        data: [],
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Accuracy %'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Update metrics display
+        function updateMetrics(data) {
+            const metrics = data.current_metrics;
+            console.log("Received metrics:", metrics);            const history = data.performance_history;
+            
+            // Update metric cards
+            document.getElementById('total-predictions').textContent = metrics.total_predictions;
+            document.getElementById('avg-processing-time').textContent = metrics.avg_processing_time.toFixed(2);
+            console.log("Processing time:", metrics.avg_processing_time);            document.getElementById('avg-accuracy').textContent = (metrics.avg_character_accuracy * 100).toFixed(1);
+            console.log("Character accuracy:", metrics.avg_character_accuracy);            document.getElementById('system-cpu').textContent = metrics.system_cpu.toFixed(1);
+            document.getElementById('system-memory').textContent = metrics.system_memory.toFixed(1);
+            document.getElementById('active-users').textContent = metrics.active_users;
+            document.getElementById('avg-cer').textContent = (metrics.avg_cer * 100).toFixed(2);
+            
+            // Update charts
+            if (history.timestamps.length > 0) {
+                processingTimeChart.data.labels = history.timestamps;
+                processingTimeChart.data.datasets[0].data = history.processing_times;
+                processingTimeChart.update('none');
+                
+                accuracyChart.data.labels = history.timestamps;
+                accuracyChart.data.datasets[0].data = history.character_accuracies.map(acc => acc * 100);
+                accuracyChart.update('none');
+            }
+            
+            // Update last update time
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        }
+        
+        // Load recent predictions
+        async function loadRecentPredictions() {
+            try {
+                const response = await fetch('/api/recent-predictions');
+                const predictions = await response.json();
+                
+                const predictionsList = document.getElementById('predictions-list');
+                
+                if (predictions.length === 0) {
+                    predictionsList.innerHTML = '<div class="loading">No predictions yet</div>';
+                    return;
+                }
+                
+                predictionsList.innerHTML = predictions.map(pred => `
+                    <div class="prediction-item">
+                        <div class="status-indicator"></div>
+                        <div class="prediction-info">
+                            <div class="prediction-time">${pred.timestamp}</div>
+                            <div class="prediction-metrics">
+                                <span class="prediction-metric">
+                                    <span class="metric-label">Time:</span>${pred.processing_time}s
+                                </span>
+                                <span class="prediction-metric">
+                                    <span class="metric-label">Accuracy:</span>${(pred.character_accuracy * 100).toFixed(1)}%
+                                </span>
+                                <span class="prediction-metric">
+                                    <span class="metric-label">Text:</span>${pred.draft_length} → ${pred.corrected_length}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                document.getElementById('predictions-list').innerHTML = 
+                    '<div class="error">Error loading predictions: ' + error.message + '</div>';
+            }
+        }
+        
+        // Socket.IO event handlers
+        socket.on('connect', function() {
+            console.log('Connected to dashboard');
+            loadRecentPredictions();
+        });
+        
+        socket.on('metrics_update', function(data) {
+            updateMetrics(data);
+        });
+        
+        socket.on('disconnect', function() {
+            console.log('Disconnected from dashboard');
+        });
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            loadRecentPredictions();
+            
+            // Refresh predictions every 30 seconds
+            setInterval(loadRecentPredictions, 30000);
+        });
+    </script>
+</body>
+</html> 

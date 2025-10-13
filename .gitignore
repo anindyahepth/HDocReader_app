@@ -172,3 +172,43 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Environment variables (IMPORTANT - contains API keys!)
+.env
+.env.local
+.env.*.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# MLflow artifacts and runs
+mlruns/
+mlflow.db
+
+# Uploaded images and processed data
+images/
+lines/
+outputs/
+
+# Docker volumes and data
+docker-compose.override.yml
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak
+*_backup.*
+
+# Exclude specific documentation and setup files
+DOCKER_TUTORIAL.md
+setup-docker.sh

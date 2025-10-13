@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# MLflow artifacts (will be created in container)
+mlflow.db
+mlruns/
+
+# Database
+db.db
+
+# Logs
+*.log
+
+# Test files
+test_*.py
+*_test.py
+
+# Jupyter Notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Large files
+*.pth
+*.pt
+*.bin
+*.ckpt
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
+

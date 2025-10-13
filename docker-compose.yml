@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  hdocreader:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hdocreader_app
+    ports:
+      - "5000:5000"  # Flask App
+      - "5001:5001"  # MLflow UI
+      - "5002:5002"  # Dashboard
+    environment:
+      - FLASK_APP_PORT=5000
+      - MLFLOW_UI_PORT=5001
+      - DASHBOARD_PORT=5002
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - FLASK_ENV=production
+    volumes:
+      # Persist MLflow data and database
+      - mlflow_data:/app/mlruns
+      - ./mlflow.db:/app/mlflow.db
+      - ./db.db:/app/db.db
+      # Mount images directory for easier access
+      - ./images:/app/images
+      - ./lines:/app/lines
+    restart: unless-stopped
+    networks:
+      - hdocreader_network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  mlflow_data:
+    driver: local
+
+networks:
+  hdocreader_network:
+    driver: bridge
+
+
