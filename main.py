@@ -41,6 +41,16 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 import subprocess
 
+#manual ngrok set up for Colab
+from pyngrok import ngrok #needed for running on Colab
+#################################
+ngrok_path = ngrok.install_ngrok()
+FLASK_PORT = 5000
+public_url = ngrok.connect(FLASK_PORT).public_url
+print(f"ngrok tunnel established! Public URL: {public_url}")
+#################################
+
+
 # Flask app configuration for local deployment
 load_dotenv()
 FLASK_PORT = os.environ.get('FLASK_APP_PORT')
