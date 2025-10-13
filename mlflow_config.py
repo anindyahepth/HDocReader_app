@@ -4,7 +4,7 @@ from datetime import datetime
 
 # MLflow Configuration
 MLFLOW_TRACKING_URI = "sqlite:///mlflow.db"  # Local SQLite database
-EXPERIMENT_NAME = "handwriting_recognition"
+EXPERIMENT_NAME = "handwriting_recognition" # add in an option.py file
 
 def setup_mlflow():
     """Set up MLflow tracking and experiment"""
