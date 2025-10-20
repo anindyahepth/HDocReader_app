@@ -3,10 +3,11 @@
 This is Flask-based web-app for transcribing handwritten text entered by a user or from an uploaded document at the line or paragraph level. 
 
 The workflow has the following components: 
-1) **Draft Transcription** :  Pre-trained **TrOCR** model performs a first draft of the transcription from the uploaded document. 
-2) **LLM Editor** : **Gemini-2.5-flash** corrects the first draft using the image of the document as context, and produces the final transcript.
-3) **Evaluation** : The final transcript is evaluated by a second LLM **(GPT-4o)** which gives the transcript an accuracy score based on the evaluated Character Accuracy Rate (CER).
-4) **MLflow Tracking/Real-time Performance Dashboard**.
+1) **Text Detection** : A YOLOv8 model fine-tuned on custom data detects the handwritten text.
+2) **Draft Transcription** :  Pre-trained **TrOCR** model performs a first draft of the transcription from the detected text. 
+3) **LLM Editor** : **Gemini-2.5-flash** corrects the first draft using the image of the document as context, and produces the final transcript.
+4) **Evaluation** : The final transcript is evaluated by a second LLM **(GPT-4o)** which gives the transcript an accuracy score based on the evaluated Character Accuracy Rate (CER).
+5) **MLflow Tracking and Real-time Performance Dashboard with Flask-SocketIO**.
 
    
 
